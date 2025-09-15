@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sorteio com Google Sheets</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .winner-animate {
+            animation: fadeInScale 0.8s ease-out forwards;
+        }
+        @keyframes fadeInScale {
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        .list-item-animate {
+            animation: slideIn 0.5s ease-out forwards;
+        }
+        @keyframes slideIn {
+            0% {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="w-full max-w-4xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-cyan-400">Aplicativo de Sorteio</h1>
+            <p class="text-gray-400 mt-2">Use uma planilha do Google Sheets como sua lista de participantes.</p>
+        </header>
+
+        <main class="space-y-6">
+            <!-- Seção de Instruções e Input -->
+            <div id="setup-section" class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                <h2 class="text-xl font-semibold mb-4 text-cyan-300">1. Prepare sua Planilha</h2>
+                <div class="text-gray-300 space-y-2 text-sm">
+                    <p>1. Abra sua planilha no <strong>Google Sheets</strong>.</p>
+                    <p>2. Clique em <strong>Arquivo</strong> > <strong>Compartilhar</strong> > <strong>Publicar na web</strong>.</p>
+                    <p>3. Na janela que abrir, selecione a aba correta e escolha o formato <strong>Valores separados por vírgula (.csv)</strong>.</p>
+                    <p>4. Clique em <strong>Publicar</strong> e copie o link gerado.</p>
+                </div>
+
+                <div class="mt-6">
+                    <label for="sheet-url" class="block text-lg font-medium mb-2 text-cyan-300">2. Cole o link da sua planilha (.csv)</label>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="w-full bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition">
+                        <button id="load-button" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 whitespace-nowrap">Carregar Participantes</button>
+                    </div>
+                    <p id="error-message" class="text-red-400 mt-2 text-sm"></p>
+                </div>
+            </div>
+
+            <!-- Seção do Sorteio (inicialmente oculta) -->
+            <div id="raffle-section" class="hidden">
+                <div class="text-center bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-700">
+                    <h2 class="text-2xl font-bold mb-4 text-cyan-300">Sorteio</h2>
+                    <div id="winner-display" class="min-h-[80px] flex items-center justify-center mb-6">
+                         <p class="text-gray-500">Clique em "Sortear" para ver o vencedor!</p>
+                    </div>
+                    <button id="draw-button" class="bg-green-500 hover:bg-green-600 text-white font-bold text-xl py-4 px-10 rounded-lg transition duration-300 shadow-lg disabled:bg-gray-600 disabled:cursor-not-allowed">Sortear!</button>
+                    <button id="reset-button" class="ml-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 text-sm">Resetar</button>
+                </div>
+
+                <!-- Listas de Participantes e Sorteados -->
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-4 text-cyan-300">Participantes (<span id="participants-count">0</span>)</h3>
+                        <ul id="participants-list" class="space-y-2 max-h-80 overflow-y-auto pr-2">
+                           <!-- Nomes serão inseridos aqui -->
+                        </ul>
+                    </div>
+                    <div class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
+                        <h3 class="text-xl font-semibold mb-4 text-green-400">Sorteados (<span id="winners-count">0</span>)</h3>
+                        <ul id="winners-list" class="space-y-2 max-h-80 overflow-y-auto pr-2">
+                            <!-- Nomes sorteados aqui -->
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Elementos da UI
+        const loadButton = document.getElementById('load-button');
+        const drawButton = document.getElementById('draw-button');
+        const resetButton = document.getElementById('reset-button');
+        const sheetUrlInput = document.getElementById('sheet-url');
+        const errorMessage = document.getElementById('error-message');
+        
+        const setupSection = document.getElementById('setup-section');
+        const raffleSection = document.getElementById('raffle-section');
+        
+        const winnerDisplay = document.getElementById('winner-display');
+        const participantsList = document.getElementById('participants-list');
+        const winnersList = document.getElementById('winners-list');
+        const participantsCount = document.getElementById('participants-count');
+        const winnersCount = document.getElementById('winners-count');
+
+        // Estado da aplicação
+        let participants = [];
+        let winners = [];
+
+        // Funções
+        const renderLists = () => {
+            // Limpa listas
+            participantsList.innerHTML = '';
+            winnersList.innerHTML = '';
+
+            // Renderiza participantes
+            participants.forEach(name => {
+                const li = document.createElement('li');
+                li.textContent = name;
+                li.className = 'bg-gray-700 p-3 rounded-lg text-gray-300 list-item-animate';
+                participantsList.appendChild(li);
+            });
+
+            // Renderiza sorteados
+            winners.forEach(name => {
+                const li = document.createElement('li');
+                li.textContent = name;
+                li.className = 'bg-green-900/50 p-3 rounded-lg text-green-300 line-through list-item-animate';
+                winnersList.appendChild(li);
+            });
+            
+            // Atualiza contadores
+            participantsCount.textContent = participants.length;
+            winnersCount.textContent = winners.length;
+
+            // Desabilita o botão de sortear se não houver participantes
+            drawButton.disabled = participants.length === 0;
+            if(drawButton.disabled) {
+                 winnerDisplay.innerHTML = `<p class="text-xl text-yellow-400 font-bold">Todos foram sorteados!</p>`;
+            }
+        };
+
+        const loadNames = async () => {
+            const urlOrData = sheetUrlInput.value.trim();
+            if (!urlOrData) {
+                errorMessage.textContent = 'Por favor, insira um URL válido.';
+                return;
+            }
+
+            loadButton.textContent = 'Carregando...';
+            loadButton.disabled = true;
+            errorMessage.textContent = '';
+            
+            try {
+                let csvText;
+
+                // CORREÇÃO: Verifica se o input é uma Data URL (conteúdo de arquivo colado)
+                if (urlOrData.startsWith('data:text/csv')) {
+                    const base64Marker = ';base64,';
+                    const base64Index = urlOrData.indexOf(base64Marker);
+                    if (base64Index === -1) {
+                        throw new Error('Formato de dados CSV inválido. Se estiver colando dados, certifique-se de que estão no formato base64.');
+                    }
+                    
+                    const base64Data = urlOrData.substring(base64Index + base64Marker.length);
+                    
+                    // Decodificação robusta de Base64 para UTF-8 para lidar com acentos
+                    const byteString = atob(base64Data);
+                    const byteArray = new Uint8Array(byteString.length);
+                    for (let i = 0; i < byteString.length; i++) {
+                        byteArray[i] = byteString.charCodeAt(i);
+                    }
+                    const decoder = new TextDecoder('utf-8');
+                    csvText = decoder.decode(byteArray);
+
+                } else {
+                    // Lógica original para buscar de um URL http/https
+                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlOrData)}`;
+                    const response = await fetch(proxyUrl);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    csvText = data.contents;
+                }
+                
+                if(!csvText) {
+                    throw new Error('Não foi possível carregar o conteúdo da planilha. Verifique o link ou o arquivo e as permissões.');
+                }
+                
+                const trimmedCsvText = csvText.trim();
+                if (trimmedCsvText.toLowerCase().startsWith('<!doctype html') || trimmedCsvText.toLowerCase().startsWith('<html')) {
+                    throw new Error('O link parece ser de uma página web (HTML), e não um arquivo CSV. Por favor, confirme se você publicou a planilha no formato "Valores separados por vírgula (.csv)" e copiou o link correto.');
+                }
+
+
+                // Lógica de parsing aprimorada para lidar com nomes em linhas ou separados por vírgula.
+                const lines = csvText.split(/\r?\n/);
+                let allNames = [];
+                lines.forEach(line => {
+                    // Divide cada linha por vírgulas, para o caso de múltiplos nomes na mesma linha.
+                    const namesInLine = line.split(',').map(name => {
+                        // Limpa cada nome individualmente (remove espaços e aspas)
+                        return name.trim().replace(/^"|"$/g, '');
+                    });
+                    allNames = allNames.concat(namesInLine);
+                });
+
+                // Filtra quaisquer nomes vazios que possam ter sobrado
+                participants = allNames.filter(name => name.length > 0);
+                
+                if (participants.length === 0) {
+                     throw new Error('Nenhum participante encontrado na planilha. Verifique se há nomes na primeira coluna.');
+                }
+
+                winners = [];
+                
+                // Transição para a tela de sorteio
+                setupSection.classList.add('hidden');
+                raffleSection.classList.remove('hidden');
+
+                renderLists();
+
+            } catch (error) {
+                console.error("Falha ao carregar a planilha:", error);
+                errorMessage.textContent = `${error.message}`;
+            } finally {
+                loadButton.textContent = 'Carregar Participantes';
+                loadButton.disabled = false;
+            }
+        };
+
+        const drawWinner = () => {
+            if (participants.length === 0) {
+                return;
+            }
+
+            const winnerIndex = Math.floor(Math.random() * participants.length);
+            const winner = participants.splice(winnerIndex, 1)[0]; // Remove da pool
+            winners.push(winner); // Adiciona aos sorteados
+
+            // Animação do vencedor
+            winnerDisplay.innerHTML = `<p class="text-3xl md:text-4xl text-green-400 font-bold winner-animate">${winner}</p>`;
+            
+            renderLists();
+        };
+        
+        const resetRaffle = () => {
+            participants = [];
+            winners = [];
+            sheetUrlInput.value = '';
+            winnerDisplay.innerHTML = '<p class="text-gray-500">Clique em "Sortear" para ver o vencedor!</p>';
+            
+            // Volta para a tela de setup
+            raffleSection.classList.add('hidden');
+            setupSection.classList.remove('hidden');
+            errorMessage.textContent = '';
+            renderLists();
+        };
+
+        // Event Listeners
+        loadButton.addEventListener('click', loadNames);
+        drawButton.addEventListener('click', drawWinner);
+        resetButton.addEventListener('click', resetRaffle);
+        
+        // Permite carregar apertando Enter no input
+        sheetUrlInput.addEventListener('keyup', (event) => {
+            if(event.key === 'Enter') {
+                loadNames();
+            }
+        });
+
+    </script>
+</body>
+</html>
+
