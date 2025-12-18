@@ -38,13 +38,30 @@
                 transform: translateX(0);
             }
         }
+        .loading-dots span {
+            animation: blink 1.4s infinite both;
+        }
+        .loading-dots span:nth-child(2) {
+            animation-delay: .2s;
+        }
+        .loading-dots span:nth-child(3) {
+            animation-delay: .4s;
+        }
+        @keyframes blink {
+            0%, 80%, 100% {
+                opacity: 0;
+            }
+            40% {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-center p-4">
 
     <div class="w-full max-w-4xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold text-cyan-400">Aplicativo de Sorteio</h1>
+            <h1 class="text-4xl md:text-5xl font-bold text-cyan-400">Sorteio de Aniversário do BEMAD</h1>
             <p class="text-gray-400 mt-2">Use uma planilha do Google Sheets como sua lista de participantes.</p>
         </header>
 
@@ -53,16 +70,16 @@
             <div id="setup-section" class="bg-gray-800 p-6 rounded-2xl shadow-lg border border-gray-700">
                 <h2 class="text-xl font-semibold mb-4 text-cyan-300">1. Prepare sua Planilha</h2>
                 <div class="text-gray-300 space-y-2 text-sm">
-                    <p>1. Abra sua planilha no <strong>Google Sheets</strong>.</p>
-                    <p>2. Clique em <strong>Arquivo</strong> > <strong>Compartilhar</strong> > <strong>Publicar na web</strong>.</p>
-                    <p>3. Na janela que abrir, selecione a aba correta e escolha o formato <strong>Valores separados por vírgula (.csv)</strong>.</p>
-                    <p>4. Clique em <strong>Publicar</strong> e copie o link gerado.</p>
+                    <p>1. Crie uma aba em sua planilha chamada <strong>Participantes</strong> (com 'P' maiúsculo).</p>
+                    <p>2. Adicione todos os nomes na <strong>coluna A</strong> dessa aba.</p>
+                    <p>3. Clique no botão <strong>Compartilhar</strong> no canto superior direito.</p>
+                    <p>4. Em "Acesso geral", mude para <strong>Qualquer pessoa com o link</strong> e copie o link.</p>
                 </div>
 
                 <div class="mt-6">
-                    <label for="sheet-url" class="block text-lg font-medium mb-2 text-cyan-300">2. Cole o link da sua planilha (.csv)</label>
+                    <label for="sheet-url" class="block text-lg font-medium mb-2 text-cyan-300">2. Cole o link de compartilhamento da planilha</label>
                     <div class="flex flex-col sm:flex-row gap-2">
-                        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv" class="w-full bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition">
+                        <input type="url" id="sheet-url" placeholder="https://docs.google.com/spreadsheets/d/..." class="w-full bg-gray-700 text-white border border-gray-600 rounded-lg px-4 py-3 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition">
                         <button id="load-button" class="bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 whitespace-nowrap">Carregar Participantes</button>
                     </div>
                     <p id="error-message" class="text-red-400 mt-2 text-sm"></p>
@@ -73,10 +90,10 @@
             <div id="raffle-section" class="hidden">
                 <div class="text-center bg-gray-800 p-8 rounded-2xl shadow-lg border border-gray-700">
                     <h2 class="text-2xl font-bold mb-4 text-cyan-300">Sorteio</h2>
-                    <div id="winner-display" class="min-h-[80px] flex items-center justify-center mb-6">
+                    <div id="winner-display" class="min-h-[80px] flex flex-col items-center justify-center mb-6">
                          <p class="text-gray-500">Clique em "Sortear" para ver o vencedor!</p>
                     </div>
-                    <button id="draw-button" class="bg-green-500 hover:bg-green-600 text-white font-bold text-xl py-4 px-10 rounded-lg transition duration-300 shadow-lg disabled:bg-gray-600 disabled:cursor-not-allowed">Sortear!</button>
+                    <button id="draw-button" class="bg-green-500 hover:bg-green-600 text-white font-bold text-xl py-4 px-10 rounded-lg transition duration-300 shadow-lg disabled:bg-gray-600 disabled:cursor-not-allowed">✨ Sortear com Emoção!</button>
                     <button id="reset-button" class="ml-2 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 text-sm">Resetar</button>
                 </div>
 
@@ -122,11 +139,9 @@
 
         // Funções
         const renderLists = () => {
-            // Limpa listas
             participantsList.innerHTML = '';
             winnersList.innerHTML = '';
 
-            // Renderiza participantes
             participants.forEach(name => {
                 const li = document.createElement('li');
                 li.textContent = name;
@@ -134,7 +149,6 @@
                 participantsList.appendChild(li);
             });
 
-            // Renderiza sorteados
             winners.forEach(name => {
                 const li = document.createElement('li');
                 li.textContent = name;
@@ -142,11 +156,9 @@
                 winnersList.appendChild(li);
             });
             
-            // Atualiza contadores
             participantsCount.textContent = participants.length;
             winnersCount.textContent = winners.length;
 
-            // Desabilita o botão de sortear se não houver participantes
             drawButton.disabled = participants.length === 0;
             if(drawButton.disabled) {
                  winnerDisplay.innerHTML = `<p class="text-xl text-yellow-400 font-bold">Todos foram sorteados!</p>`;
@@ -154,107 +166,115 @@
         };
 
         const loadNames = async () => {
-            const urlOrData = sheetUrlInput.value.trim();
-            if (!urlOrData) {
-                errorMessage.textContent = 'Por favor, insira um URL válido.';
+            let rawInput = sheetUrlInput.value.trim();
+            if (!rawInput) {
+                errorMessage.textContent = 'Por favor, insira um URL ou dados válidos.';
                 return;
             }
 
             loadButton.textContent = 'Carregando...';
             loadButton.disabled = true;
             errorMessage.textContent = '';
-            
+
             try {
                 let csvText;
+                
+                if (rawInput.startsWith('"') && rawInput.endsWith('"')) {
+                    rawInput = rawInput.substring(1, rawInput.length - 1);
+                }
 
-                // CORREÇÃO: Verifica se o input é uma Data URL (conteúdo de arquivo colado)
-                if (urlOrData.startsWith('data:text/csv')) {
-                    const base64Marker = ';base64,';
-                    const base64Index = urlOrData.indexOf(base64Marker);
-                    if (base64Index === -1) {
-                        throw new Error('Formato de dados CSV inválido. Se estiver colando dados, certifique-se de que estão no formato base64.');
-                    }
-                    
-                    const base64Data = urlOrData.substring(base64Index + base64Marker.length);
-                    
-                    // Decodificação robusta de Base64 para UTF-8 para lidar com acentos
-                    const byteString = atob(base64Data);
-                    const byteArray = new Uint8Array(byteString.length);
-                    for (let i = 0; i < byteString.length; i++) {
-                        byteArray[i] = byteString.charCodeAt(i);
-                    }
-                    const decoder = new TextDecoder('utf-8');
-                    csvText = decoder.decode(byteArray);
+                const googleSheetRegex = /\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/;
+                const sheetMatch = rawInput.match(googleSheetRegex);
+                const isDataURI = rawInput.startsWith('data:text/csv');
 
-                } else {
-                    // Lógica original para buscar de um URL http/https
-                    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(urlOrData)}`;
+                if (sheetMatch && sheetMatch[1]) {
+                    const spreadsheetId = sheetMatch[1];
+                    const fetchUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv&sheet=Participantes`;
+                    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(fetchUrl)}`;
                     const response = await fetch(proxyUrl);
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    const data = await response.json();
-                    csvText = data.contents;
-                }
-                
-                if(!csvText) {
-                    throw new Error('Não foi possível carregar o conteúdo da planilha. Verifique o link ou o arquivo e as permissões.');
-                }
-                
-                const trimmedCsvText = csvText.trim();
-                if (trimmedCsvText.toLowerCase().startsWith('<!doctype html') || trimmedCsvText.toLowerCase().startsWith('<html')) {
-                    throw new Error('O link parece ser de uma página web (HTML), e não um arquivo CSV. Por favor, confirme se você publicou a planilha no formato "Valores separados por vírgula (.csv)" e copiou o link correto.');
+                    if (!response.ok) throw new Error(`Erro de rede ao buscar planilha: ${response.status}`);
+                    csvText = await response.text();
+                } else if (isDataURI) {
+                    const base64Marker = ';base64,';
+                    const base64Index = rawInput.indexOf(base64Marker);
+                    if (base64Index === -1) throw new Error('Formato de Data URI CSV inválido.');
+                    const base64Data = rawInput.substring(base64Index + base64Marker.length);
+                    const decodedString = atob(base64Data);
+                    csvText = new TextDecoder('utf-8').decode(Uint8Array.from(decodedString, c => c.charCodeAt(0)));
+                } else {
+                    throw new Error('Formato de entrada não reconhecido. Use um link do Google Sheets ou cole os dados CSV.');
                 }
 
-
-                // Lógica de parsing aprimorada para lidar com nomes em linhas ou separados por vírgula.
-                const lines = csvText.split(/\r?\n/);
-                let allNames = [];
-                lines.forEach(line => {
-                    // Divide cada linha por vírgulas, para o caso de múltiplos nomes na mesma linha.
-                    const namesInLine = line.split(',').map(name => {
-                        // Limpa cada nome individualmente (remove espaços e aspas)
-                        return name.trim().replace(/^"|"$/g, '');
-                    });
-                    allNames = allNames.concat(namesInLine);
-                });
-
-                // Filtra quaisquer nomes vazios que possam ter sobrado
-                participants = allNames.filter(name => name.length > 0);
-                
-                if (participants.length === 0) {
-                     throw new Error('Nenhum participante encontrado na planilha. Verifique se há nomes na primeira coluna.');
+                if (!csvText) {
+                     throw new Error('Falha ao processar a entrada. Nenhum dado CSV foi encontrado.');
                 }
 
+                if (csvText.toLowerCase().includes('<!doctype html')) {
+                    throw new Error('Recebido HTML. Verifique se a aba se chama "Participantes" e se a planilha é pública.');
+                }
+
+                const allNames = csvText.trim()
+                    .split(/\r?\n/)
+                    .map(name => name.trim().replace(/^"|"$/g, ''))
+                    .filter(name => name.length > 0);
+
+                if (allNames.length === 0) {
+                    throw new Error('Nenhum participante encontrado nos dados fornecidos.');
+                }
+
+                participants = allNames;
                 winners = [];
-                
-                // Transição para a tela de sorteio
                 setupSection.classList.add('hidden');
                 raffleSection.classList.remove('hidden');
-
                 renderLists();
 
             } catch (error) {
-                console.error("Falha ao carregar a planilha:", error);
-                errorMessage.textContent = `${error.message}`;
+                console.error("Falha ao carregar nomes:", error);
+                errorMessage.textContent = error.message;
             } finally {
                 loadButton.textContent = 'Carregar Participantes';
                 loadButton.disabled = false;
             }
         };
 
-        const drawWinner = () => {
-            if (participants.length === 0) {
-                return;
+        const generateCreativeAnnouncement = async (winnerName) => {
+            const apiKey = ""; // Será tratado pelo ambiente de execução
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const systemPrompt = "Você é um mestre de cerimônias de sorteios, conhecido por sua energia e criatividade. Sua tarefa é criar anúncios de vencedores que sejam curtos, divertidos e memoráveis, em uma única frase.";
+            const userQuery = `Anuncie que '${winnerName}' acabou de ganhar o sorteio. Crie uma frase única e empolgante em português do Brasil.`;
+            const payload = {
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                contents: [{ parts: [{ text: userQuery }] }],
+            };
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (!response.ok) throw new Error(`API respondeu com status: ${response.status}`);
+                const result = await response.json();
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                return text || `Parabéns, ${winnerName}!`;
+            } catch (error) {
+                console.error("Erro ao chamar a API Gemini:", error);
+                return `A sorte sorriu para... ${winnerName}! Parabéns!`;
             }
+        };
 
+        const drawWinner = async () => {
+            if (participants.length === 0) return;
+            drawButton.disabled = true;
             const winnerIndex = Math.floor(Math.random() * participants.length);
-            const winner = participants.splice(winnerIndex, 1)[0]; // Remove da pool
-            winners.push(winner); // Adiciona aos sorteados
-
-            // Animação do vencedor
-            winnerDisplay.innerHTML = `<p class="text-3xl md:text-4xl text-green-400 font-bold winner-animate">${winner}</p>`;
-            
+            const winner = participants.splice(winnerIndex, 1)[0];
+            winners.push(winner);
+            winnerDisplay.innerHTML = `<div class="text-xl text-gray-400 loading-dots"><span>.</span><span>.</span><span>.</span></div>`;
+            const announcement = await generateCreativeAnnouncement(winner);
+            winnerDisplay.innerHTML = `
+                <div class="winner-animate">
+                    <p class="text-3xl md:text-4xl text-green-400 font-bold">${announcement}</p>
+                    <p class="text-xs text-gray-500 mt-2">✨ Anúncio gerado por IA</p>
+                </div>`;
             renderLists();
         };
         
@@ -263,27 +283,19 @@
             winners = [];
             sheetUrlInput.value = '';
             winnerDisplay.innerHTML = '<p class="text-gray-500">Clique em "Sortear" para ver o vencedor!</p>';
-            
-            // Volta para a tela de setup
             raffleSection.classList.add('hidden');
             setupSection.classList.remove('hidden');
             errorMessage.textContent = '';
             renderLists();
         };
 
-        // Event Listeners
         loadButton.addEventListener('click', loadNames);
         drawButton.addEventListener('click', drawWinner);
         resetButton.addEventListener('click', resetRaffle);
-        
-        // Permite carregar apertando Enter no input
         sheetUrlInput.addEventListener('keyup', (event) => {
-            if(event.key === 'Enter') {
-                loadNames();
-            }
+            if(event.key === 'Enter') loadNames();
         });
 
     </script>
 </body>
 </html>
-
